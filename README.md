@@ -1,58 +1,144 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FixYourDoc
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Upload a Word manuscript (`.docx`), describe the formatting rules a journal
+wants, and get back a cleanly formatted copy. The rules are a JSON spec edited
+through a form, so the same document can be reformatted for different journals.
 
-## About Laravel
+Built with Laravel 13, Jetstream (Livewire) and a Python formatter
+(`python-docx`) that does the actual document editing.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## What it can format
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Area | Settings |
+| --- | --- |
+| Page | A4 or Letter, four margins (`in`, `cm`, `mm`) |
+| Font | Family and size, applied to Word styles (and optionally every run) |
+| Paragraphs | Line spacing, space before and after, alignment |
+| Headings | Font, size per heading level, bold |
+| Page numbers | Header or footer, alignment, start number |
+| Images | Shrink to the usable page width, centre |
+| Tables | Width, alignment, font and size |
+| References | Hanging indent, numbering style, spacing, stops at the next heading |
+| Clean-up | Remove empty paragraphs, collapse repeated blank lines |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Settings that are left blank use the formatter's own defaults. The Advanced
+(JSON) tab accepts only settings the formatter understands; anything else is
+rejected with the name of the setting, so a rule is never silently ignored.
 
-## Learning Laravel
+## Requirements
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- PHP 8.4 or newer (the site's PHP-FPM pool must match; check with `php -v`)
+- Composer, Node and npm
+- Python 3 with `venv`
+- A database supported by Laravel (MariaDB in `.env.example`)
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup
 
 ```bash
-composer require laravel/boost --dev
+composer install
+npm install && npm run build
 
-php artisan boost:install
+cp .env.example .env
+php artisan key:generate
+# edit .env: database settings, APP_URL
+
+php artisan migrate
+
+# Python environment for the formatter
+python3 -m venv scripts/venv
+scripts/venv/bin/pip install -r scripts/requirements.txt
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`DOCX_FORMATTER_PYTHON` in `.env` overrides the interpreter. It defaults to
+`scripts/venv/bin/python`. Use an absolute path if you point it elsewhere,
+because queue workers do not share your shell's `PATH`.
 
-## Contributing
+### Run the queue worker
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Formatting runs in a queued job. Nothing happens to an uploaded document until
+a worker is running:
 
-## Code of Conduct
+```bash
+php artisan queue:work
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+In production, keep it running with a process manager such as Supervisor.
 
-## Security Vulnerabilities
+### Web server notes
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- **nginx:** if you have a rule that serves static extensions (`.js`, `.css`
+  and so on), give it a fallback to Laravel, otherwise Livewire's script at
+  `/livewire/livewire.js` returns 404:
+
+  ```nginx
+  location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+      try_files $uri /index.php?$query_string;
+      expires max;
+  }
+  ```
+
+- **Upload size:** the app accepts files up to 10 MB by default
+  (`DOCX_FORMATTER_MAX_UPLOAD_KB`). PHP's `upload_max_filesize` and
+  `post_max_size`, and nginx's `client_max_body_size`, must be at least that
+  large. Livewire's own temporary upload limit is 12 MB.
+
+## Configuration
+
+All optional, set in `.env`:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DOCX_FORMATTER_PYTHON` | `scripts/venv/bin/python` | Interpreter with `python-docx` installed |
+| `DOCX_FORMATTER_TIMEOUT` | `120` | Seconds before a formatting run is stopped |
+| `DOCX_FORMATTER_MAX_UPLOAD_KB` | `10240` | Largest accepted upload |
+| `DOCX_FORMATTER_MAX_UNCOMPRESSED_MB` | `100` | Largest accepted size once unpacked (guards against zip bombs) |
+| `DOCX_FORMATTER_DISK` | `local` | Storage disk for uploads and results |
+
+## How it works
+
+1. **Upload** (`app/Livewire/FormatDocument.php`): the file is checked
+   (`app/Rules/ValidDocx.php`), the spec is normalised and validated
+   (`app/Support/FormatSpec.php`), the file is stored privately and a
+   `FormatJob` is created.
+2. **Job** (`app/Jobs/FormatDocumentJob.php`): runs
+   `app/Services/DocxFormatter.php`, which calls `scripts/docx_formatter.py`
+   with the spec written to a temporary file. Arguments are passed as an array,
+   never through a shell.
+3. **History** (`app/Livewire/FormatHistory.php`): shows each job's status and
+   offers the original and formatted files. Downloads are limited to the owner
+   (`app/Policies/FormatJobPolicy.php`).
+
+Files live under `storage/app/private/format/{user id}/{job id}/`. Deleting a
+job from the history page, or deleting a user, removes its files.
+
+## Running the formatter by hand
+
+```bash
+scripts/venv/bin/python scripts/docx_formatter.py \
+  --input manuscript.docx --spec spec.json --output formatted.docx
+```
+
+Add `--force-runs` to overwrite manual font changes inside the text. In the app
+this is the "Overwrite manual font changes" option.
+
+## Tests
+
+```bash
+php artisan test
+```
+
+The tests check the formatter's output by reading the resulting XML. They
+cannot show how a document looks in Word, so check a real manuscript before
+relying on a new spec.
+
+## Known limitations
+
+- Journal checklist items such as word counts, abstract structure and keyword
+  limits are not checked or enforced. Only formatting is applied.
+- Page numbers are Word fields, so Word updates them when the file is opened.
+- Table and image rules apply to the first section's usable page width.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The Laravel framework is open-sourced software licensed under the
+[MIT license](https://opensource.org/licenses/MIT).
