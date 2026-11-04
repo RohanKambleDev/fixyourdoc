@@ -121,6 +121,34 @@ final class FormatSpec
     }
 
     /**
+     * Turn form input into what the formatter expects: drop blank values and
+     * convert numeric strings (point sizes, start numbers) to numbers.
+     *
+     * @param  array<array-key, mixed>  $spec
+     * @return array<array-key, mixed>
+     */
+    public static function normalize(array $spec, ?string $parent = null): array
+    {
+        $normalized = [];
+
+        foreach ($spec as $key => $value) {
+            if (is_array($value)) {
+                $value = self::normalize($value, (string) $key);
+            } elseif (is_string($value) && is_numeric($value) && (
+                str_ends_with((string) $key, '_pt') || $key === 'start_at' || $parent === 'size_overrides_pt'
+            )) {
+                $value += 0;
+            }
+
+            if ($value !== null && $value !== '' && $value !== []) {
+                $normalized[$key] = $value;
+            }
+        }
+
+        return array_is_list($spec) ? array_values($normalized) : $normalized;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function example(): array

@@ -25,6 +25,12 @@ return [
 
     'timeout_seconds' => (int) env('DOCX_FORMATTER_TIMEOUT', 120),
 
+    // Kept at or below Livewire's default temporary upload limit (12 MB).
+    'max_upload_kb' => (int) env('DOCX_FORMATTER_MAX_UPLOAD_KB', 10240),
+
+    // Guards against zip bombs: a .docx is a zip archive.
+    'max_uncompressed_mb' => (int) env('DOCX_FORMATTER_MAX_UNCOMPRESSED_MB', 100),
+
     'disk' => env('DOCX_FORMATTER_DISK', 'local'),
 
 ];

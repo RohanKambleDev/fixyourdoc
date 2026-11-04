@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FormatJobDownloadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -14,4 +15,10 @@ Route::middleware([
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
+
+    Route::view('/format', 'format')->name('format.create');
+    Route::view('/format/history', 'format-history')->name('format.history');
+    Route::get('/format/jobs/{formatJob}/download/{type}', FormatJobDownloadController::class)
+        ->whereIn('type', ['original', 'formatted'])
+        ->name('format.download');
 });

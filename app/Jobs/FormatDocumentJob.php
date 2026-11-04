@@ -20,6 +20,9 @@ class FormatDocumentJob implements ShouldQueue
 
     public int $timeout;
 
+    // The user may delete a job from the history page while it is queued.
+    public bool $deleteWhenMissingModels = true;
+
     public function __construct(public FormatJob $formatJob)
     {
         $this->timeout = config('docxformatter.timeout_seconds') + 30;
