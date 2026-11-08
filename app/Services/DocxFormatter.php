@@ -18,6 +18,16 @@ class DocxFormatter
      */
     public function format(string $inputPath, array $spec, string $outputPath, bool $forceRuns = false): void
     {
+        if (! is_readable($inputPath)) {
+            Log::warning('docx formatter input is not readable', [
+                'path' => $inputPath,
+                'exists' => file_exists($inputPath),
+                'running_as' => function_exists('posix_geteuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? null) : null,
+            ]);
+
+            throw new RuntimeException('The uploaded document could not be read. Please upload it again.');
+        }
+
         $specPath = tempnam(sys_get_temp_dir(), 'docx-spec-');
 
         if ($specPath === false) {
