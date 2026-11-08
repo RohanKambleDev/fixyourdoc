@@ -105,3 +105,63 @@ test('page numbers are left aligned when the spec says left', function () {
 test('page numbers are centred when the spec says centre', function () {
     expect(formattedSample()['footer']->query('//w:p/w:pPr/w:jc/@w:val')->item(0)->nodeValue)->toBe('center');
 });
+
+// --- clean-up of empty paragraphs
+
+/**
+ * Formats a minimal document made from the given w:body content and returns
+ * queryable XML for the result.
+ */
+function formattedBody(string $bodyXml): DOMXPath
+{
+    $ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    $input = tempnam(sys_get_temp_dir(), 'in');
+    $output = tempnam(sys_get_temp_dir(), 'out');
+
+    $zip = new ZipArchive;
+    $zip->open($input, ZipArchive::OVERWRITE);
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+    $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+    $zip->addFromString('word/document.xml', "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document {$ns}><w:body>{$bodyXml}".SECTION_PROPERTIES.'</w:body></w:document>');
+    $zip->close();
+
+    app(DocxFormatter::class)->format($input, ['cleanup' => ['remove_empty_paragraphs' => true]], $output);
+
+    $zip->open($output);
+    $dom = new DOMDocument;
+    $dom->loadXML($zip->getFromName('word/document.xml'));
+    $zip->close();
+    unlink($input);
+    unlink($output);
+
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    return $xpath;
+}
+
+const SECTION_PROPERTIES = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+
+test('removing empty paragraphs keeps section breaks', function () {
+    $xpath = formattedBody(
+        '<w:p><w:r><w:t>One</w:t></w:r></w:p><w:p/><w:p><w:pPr>'.SECTION_PROPERTIES.'</w:pPr></w:p>'
+        .'<w:p><w:r><w:t>Two</w:t></w:r></w:p>',
+    );
+
+    // One break in the paragraph plus the document's final section.
+    expect($xpath->query('//w:sectPr')->length)->toBe(2);
+});
+
+test('removing empty paragraphs keeps bookmarks', function () {
+    $xpath = formattedBody(
+        '<w:p><w:r><w:t>One</w:t></w:r></w:p><w:p><w:bookmarkStart w:id="0" w:name="target"/><w:bookmarkEnd w:id="0"/></w:p>',
+    );
+
+    expect($xpath->query('//w:bookmarkStart[@w:name="target"]')->length)->toBe(1);
+});
+
+test('removing empty paragraphs still removes genuinely empty ones', function () {
+    $xpath = formattedBody('<w:p/><w:p><w:r><w:t>One</w:t></w:r></w:p><w:p/><w:p><w:pPr><w:jc w:val="left"/></w:pPr></w:p>');
+
+    expect($xpath->query('//w:body/w:p')->length)->toBe(1);
+});

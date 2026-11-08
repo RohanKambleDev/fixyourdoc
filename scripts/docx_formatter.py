@@ -295,6 +295,16 @@ def _format_images(doc, spec_images: Dict[str, Any], page_width_usable_emu: Opti
         except Exception:
             pass
 
+def _is_empty_paragraph(p) -> bool:
+    """
+    True only when the paragraph holds nothing except optional formatting
+    properties. A paragraph with no text can still carry a section break, a
+    bookmark or a field, so having no text or runs is not enough.
+    """
+    has_content = any(child.tag != qn('w:pPr') for child in p._p)
+    carries_section_break = bool(p._p.xpath('./w:pPr/w:sectPr'))
+    return not has_content and not carries_section_break
+
 def _cleanup(doc, spec_cleanup: Dict[str, Any]):
     if not spec_cleanup:
         return
@@ -305,7 +315,7 @@ def _cleanup(doc, spec_cleanup: Dict[str, Any]):
         # Iterate with a simple state machine
         prev_empty = False
         for p in list(doc.paragraphs):
-            is_empty = (p.text.strip() == '') and (len(p.runs) == 0)
+            is_empty = _is_empty_paragraph(p)
             if remove_empty and is_empty:
                 p._element.getparent().remove(p._element)
                 continue
