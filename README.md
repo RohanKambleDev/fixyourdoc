@@ -59,10 +59,17 @@ Formatting runs in a queued job. Nothing happens to an uploaded document until
 a worker is running:
 
 ```bash
-php artisan queue:work
+php artisan queue:work --queue=formatting,default
 ```
 
-In production, keep it running with a process manager such as Supervisor.
+Formatting jobs use the `formatting` queue. Listing `default` as well keeps
+any older waiting jobs moving.
+
+In production, keep it running with a process manager such as Supervisor, and
+run it as the same system user as PHP-FPM (usually `www-data`). Uploads are
+saved privately by that user, so a worker running as anyone else cannot read
+them. Restart the worker after each deploy, for example with
+`supervisorctl restart fixyourdoc-queue`.
 
 ### Web server notes
 

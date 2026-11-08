@@ -49,6 +49,16 @@ test('a docx upload creates a job and queues it', function () {
         ->status->toBe(FormatJobStatus::Pending);
 });
 
+test('formatting jobs go on their own queue', function () {
+    Queue::fake();
+
+    Livewire::test(FormatDocument::class)
+        ->set('file', fakeDocx())
+        ->call('format');
+
+    Queue::assertPushedOn('formatting', FormatDocumentJob::class);
+});
+
 test('a file that is not a real docx is rejected', function () {
     Livewire::test(FormatDocument::class)
         ->set('file', UploadedFile::fake()->createWithContent('paper.docx', 'not a zip'))

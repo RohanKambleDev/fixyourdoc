@@ -139,7 +139,7 @@ class FormatDocument extends Component
             'force_runs' => $this->forceRuns,
         ]);
 
-        FormatDocumentJob::dispatch($formatJob);
+        FormatDocumentJob::dispatch($formatJob)->onQueue('formatting');
 
         return $this->redirectRoute('format.history');
     }
