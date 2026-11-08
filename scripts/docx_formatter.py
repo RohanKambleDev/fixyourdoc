@@ -120,7 +120,9 @@ def _ensure_page_numbers(doc, where='footer', align='center', start_at: Optional
             # fallback: remove all runs
             for run in list(para.runs):
                 run._r.getparent().remove(run._r)
-        para.alignment = _align_map(align) or WD_ALIGN_PARAGRAPH.CENTER
+        # Compare with None: WD_ALIGN_PARAGRAPH.LEFT has the value 0, which is falsy
+        alignment = _align_map(align)
+        para.alignment = alignment if alignment is not None else WD_ALIGN_PARAGRAPH.CENTER
         _add_page_number_to(para)
 
 # ---------- Formatting ----------
@@ -136,22 +138,25 @@ def _set_style_font(style, family: Optional[str], size_pt: Optional[float], bold
     except Exception:
         pass
 
-def _apply_font_to_runs(doc, family: Optional[str], size_pt: Optional[float]):
-    for p in doc.paragraphs:
-        for r in p.runs:
-            if family:
-                r.font.name = family
-            if size_pt:
-                r.font.size = Pt(size_pt)
+def _clear_run_fonts(doc):
+    """
+    Remove manually set font family and size from every run so the text falls back
+    to its style (Normal, Heading 1, ...). Run before the spec is applied, so the
+    style, heading and table rules then take effect.
+    """
+    runs = [r for p in doc.paragraphs for r in p.runs]
     for t in doc.tables:
         for row in t.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    for r in p.runs:
-                        if family:
-                            r.font.name = family
-                        if size_pt:
-                            r.font.size = Pt(size_pt)
+                    runs.extend(p.runs)
+    for r in runs:
+        rPr = r._r.rPr
+        if rPr is None:
+            continue
+        for tag in ('w:rFonts', 'w:sz', 'w:szCs'):
+            for el in rPr.findall(qn(tag)):
+                rPr.remove(el)
 
 def _line_spacing_value(v) -> Optional[float]:
     if v is None:
@@ -192,6 +197,23 @@ def _format_paragraphs(doc, line_spacing=None, space_before_pt=None, space_after
                     if align_enum is not None:
                         p.alignment = align_enum
 
+def _set_table_width(tbl, width_emu: int):
+    """
+    Set the table's preferred width (w:tblW, in twentieths of a point).
+    python-docx has no table width property, so the XML is set directly, in the
+    position the schema requires inside w:tblPr.
+    """
+    tblPr = tbl._tbl.tblPr
+    tblW = tblPr.find(qn('w:tblW'))
+    if tblW is None:
+        tblW = OxmlElement('w:tblW')
+        tblPr.insert_element_before(
+            tblW, 'w:jc', 'w:tblCellSpacing', 'w:tblInd', 'w:tblBorders', 'w:shd',
+            'w:tblLayout', 'w:tblCellMar', 'w:tblLook', 'w:tblCaption', 'w:tblDescription',
+        )
+    tblW.set(qn('w:type'), 'dxa')
+    tblW.set(qn('w:w'), str(round(width_emu / 635)))  # 1 twip = 635 EMU
+
 def _format_tables(doc, spec_tables: Dict[str, Any], page_width_usable_emu: Optional[int]):
     if not spec_tables:
         return
@@ -209,16 +231,16 @@ def _format_tables(doc, spec_tables: Dict[str, Any], page_width_usable_emu: Opti
                 pass
         pref = spec_tables.get('preferred_width')
         if pref:
+            width_emu = None
             if str(pref).strip().lower() == 'page' and page_width_usable_emu:
-                try:
-                    tbl.preferred_width = page_width_usable_emu
-                except Exception:
-                    pass
+                width_emu = page_width_usable_emu
             else:
                 try:
-                    tbl.preferred_width = _to_length(pref)
+                    width_emu = _to_length(pref)
                 except Exception:
                     pass
+            if width_emu:
+                _set_table_width(tbl, width_emu)
         al = spec_tables.get('alignment')
         if al:
             try:
@@ -256,6 +278,8 @@ def _format_images(doc, spec_images: Dict[str, Any], page_width_usable_emu: Opti
     for shape in doc.inline_shapes:
         try:
             if max_width_emu and shape.width and shape.width > max_width_emu:
+                # Scale the height by the same factor so the picture is not distorted
+                shape.height = int(shape.height * max_width_emu / shape.width)
                 shape.width = max_width_emu
             if center:
                 # Center the paragraph hosting the shape
@@ -394,13 +418,20 @@ def _format_references(doc: Document, spec_refs: Dict[str, Any]):
                 pf.space_after = Pt(space_after_pt)
             # Alignment (Vancouver is typically left)
             if align:
-                p.alignment = _align_map(align) or p.alignment
+                # Compare with None: WD_ALIGN_PARAGRAPH.LEFT has the value 0, which is falsy
+                alignment = _align_map(align)
+                if alignment is not None:
+                    p.alignment = alignment
         except Exception:
             pass
 
         i += 1
 
-def apply_spec(doc: Document, spec: Dict[str, Any]) -> Document:
+def apply_spec(doc: Document, spec: Dict[str, Any], force_runs: bool = False) -> Document:
+    # Drop manual run fonts first so styles, headings and tables apply cleanly
+    if force_runs:
+        _clear_run_fonts(doc)
+
     # Page size
     _page_size(doc, spec.get('page', {}).get('size', 'A4'))
 
@@ -504,20 +535,13 @@ def main():
     ap.add_argument('--input', required=True, help='Input .docx path')
     ap.add_argument('--spec', required=True, help='JSON spec path')
     ap.add_argument('--output', required=True, help='Output .docx path')
-    ap.add_argument('--force-runs', action='store_true', help='Also set font on every run (overrides direct formatting)')
+    ap.add_argument('--force-runs', action='store_true', help='Remove manual font family and size from every run so styles apply')
     args = ap.parse_args()
 
     spec = load_json(args.spec)
 
     doc = Document(args.input)
-    doc = apply_spec(doc, spec)
-
-    # Optionally apply font to every run (to override direct formatting)
-    if args.force_runs:
-        font_spec = spec.get('font', {})
-        fam = font_spec.get('family')
-        size_pt = font_spec.get('size_pt')
-        _apply_font_to_runs(doc, family=fam, size_pt=size_pt)
+    doc = apply_spec(doc, spec, force_runs=args.force_runs)
 
     doc.save(args.output)
     print(f"Saved formatted file to: {args.output}")

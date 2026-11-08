@@ -125,8 +125,11 @@ scripts/venv/bin/python scripts/docx_formatter.py \
   --input manuscript.docx --spec spec.json --output formatted.docx
 ```
 
-Add `--force-runs` to overwrite manual font changes inside the text. In the app
-this is the "Overwrite manual font changes" option.
+Add `--force-runs` to remove manual font and size changes inside the text, so
+the text follows its style instead (headings keep their heading sizes and
+tables keep the table settings). Fonts set by hand, such as pasted text in
+another font, are otherwise left as they are. In the app this is the
+"Remove manual font changes" option.
 
 ## Tests
 

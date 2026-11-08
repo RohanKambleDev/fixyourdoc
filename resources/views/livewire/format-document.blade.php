@@ -176,7 +176,7 @@
 
                 <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input type="checkbox" wire:model="forceRuns" class="mt-0.5 rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-indigo-600 shadow-sm focus:ring-indigo-500">
-                    <span>Overwrite manual font changes inside the text. Turn this on if the font or size does not change in places where you had formatted text by hand.</span>
+                    <span>Remove manual font changes inside the text so it follows the formatting rules. Turn this on if the font or size does not change in places where you had formatted text by hand. Headings and tables keep their own sizes.</span>
                 </label>
 
                 <x-button wire:loading.attr="disabled" wire:target="format,file">

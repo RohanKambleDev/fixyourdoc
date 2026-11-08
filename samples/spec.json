@@ -1,0 +1,55 @@
+{
+  "page": {
+    "size": "A4",
+    "margins": { "top": "1in", "bottom": "1in", "left": "1.5in", "right": "1in" }
+  },
+  "font": {
+    "family": "Times New Roman",
+    "size_pt": 12,
+    "apply_to": ["Normal", "*"]
+  },
+  "paragraph": {
+    "line_spacing": "double",
+    "space_before_pt": 0,
+    "space_after_pt": 0,
+    "alignment": "justify"
+  },
+  "headings": {
+    "font_family": "Times New Roman",
+    "size_overrides_pt": { "Title": 14, "Heading 1": 14, "Heading 2": 12 },
+    "bold": ["Title", "Heading 1", "Heading 2"]
+  },
+  "page_numbers": {
+    "enabled": true,
+    "position": "footer",
+    "alignment": "center",
+    "start_at": 1
+  },
+  "images": {
+    "max_width": "page",
+    "center": true
+  },
+  "tables": {
+    "auto_fit": true,
+    "preferred_width": "page",
+    "alignment": "center",
+    "font_family": "Times New Roman",
+    "size_pt": 11
+  },
+  "references": {
+    "enabled": true,
+    "titles": ["References"],
+    "apply_numbering_style": true,
+    "numbering_style": "List Number",
+    "hanging_indent": "0.5in",
+    "line_spacing": "double",
+    "space_before_pt": 0,
+    "space_after_pt": 0,
+    "alignment": "left",
+    "stop_at_next_heading": true
+  },
+  "cleanup": {
+    "remove_empty_paragraphs": true,
+    "collapse_multiple_newlines": true
+  }
+}
