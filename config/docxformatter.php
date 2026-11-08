@@ -28,6 +28,10 @@ return [
     // Kept at or below Livewire's default temporary upload limit (12 MB).
     'max_upload_kb' => (int) env('DOCX_FORMATTER_MAX_UPLOAD_KB', 10240),
 
+    // Placeholder allowance per account per hour, to be replaced by per-plan
+    // limits once pricing is decided.
+    'uploads_per_hour' => (int) env('DOCX_FORMATTER_UPLOADS_PER_HOUR', 10),
+
     // Guards against zip bombs: a .docx is a zip archive.
     'max_uncompressed_mb' => (int) env('DOCX_FORMATTER_MAX_UNCOMPRESSED_MB', 100),
 

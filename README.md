@@ -68,8 +68,9 @@ any older waiting jobs moving.
 In production, keep it running with a process manager such as Supervisor, and
 run it as the same system user as PHP-FPM (usually `www-data`). Uploads are
 saved privately by that user, so a worker running as anyone else cannot read
-them. Restart the worker after each deploy, for example with
-`supervisorctl restart fixyourdoc-queue`.
+them. Run two worker processes (`numprocs=2` in Supervisor) so one user's long
+job does not hold up everyone else. Restart the workers after each deploy, for
+example with `supervisorctl restart fixyourdoc-queue:*`.
 
 ### Web server notes
 
@@ -98,6 +99,7 @@ All optional, set in `.env`:
 | `DOCX_FORMATTER_PYTHON` | `scripts/venv/bin/python` | Interpreter with `python-docx` installed |
 | `DOCX_FORMATTER_TIMEOUT` | `120` | Seconds before a formatting run is stopped |
 | `DOCX_FORMATTER_MAX_UPLOAD_KB` | `10240` | Largest accepted upload |
+| `DOCX_FORMATTER_UPLOADS_PER_HOUR` | `10` | Documents one account may format per hour (placeholder until per-plan limits exist) |
 | `DOCX_FORMATTER_MAX_UNCOMPRESSED_MB` | `100` | Largest accepted size once unpacked (guards against zip bombs) |
 | `DOCX_FORMATTER_DISK` | `local` | Storage disk for uploads and results |
 
@@ -117,6 +119,16 @@ All optional, set in `.env`:
 
 Files live under `storage/app/private/format/{user id}/{job id}/`. Deleting a
 job from the history page, or deleting a user, removes its files.
+
+## Sign-up protection
+
+The register form carries two bot traps: a hidden "website" field that people
+never fill in, and an encrypted timestamp. A sign-up is rejected if the hidden
+field is filled, or if the form was submitted in under 3 seconds or more than
+2 hours after it was loaded (`app/Actions/Fortify/CreateNewUser.php`). This
+stops simple scripts only. Email verification is not enabled: it needs real
+outgoing mail first (`MAIL_MAILER` is `log` by default, which writes emails to
+the log instead of sending them).
 
 ## Running the formatter by hand
 

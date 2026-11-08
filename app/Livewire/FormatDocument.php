@@ -9,6 +9,7 @@ use App\Rules\ValidDocx;
 use App\Support\FormatSpec;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -122,6 +123,18 @@ class FormatDocument extends Component
         if ($spec === null) {
             return null;
         }
+
+        $limiterKey = 'format-uploads:'.auth()->id();
+        $uploadsPerHour = config('docxformatter.uploads_per_hour');
+
+        if (RateLimiter::tooManyAttempts($limiterKey, $uploadsPerHour)) {
+            $minutes = (int) ceil(RateLimiter::availableIn($limiterKey) / 60);
+            $this->addError('file', "You can format {$uploadsPerHour} documents per hour. Please try again in {$minutes} minutes.");
+
+            return null;
+        }
+
+        RateLimiter::hit($limiterKey, 60 * 60);
 
         $path = $this->file->storeAs(
             'format/'.auth()->id().'/'.Str::uuid(),

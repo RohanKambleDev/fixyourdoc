@@ -9,6 +9,13 @@
         <form method="POST" action="{{ route('register') }}">
             @csrf
 
+            {{-- Bot traps: people never see or fill these --}}
+            <div aria-hidden="true" style="position: absolute; left: -9999px;">
+                <label for="website">Website</label>
+                <input id="website" type="text" name="website" tabindex="-1" autocomplete="off">
+            </div>
+            <input type="hidden" name="started_at" value="{{ Crypt::encryptString((string) now()->timestamp) }}">
+
             <div>
                 <x-label for="name" value="{{ __('Name') }}" />
                 <x-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />

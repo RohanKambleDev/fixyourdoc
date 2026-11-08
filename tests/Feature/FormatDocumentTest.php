@@ -240,3 +240,44 @@ function makeJob(User $user, string $name, bool $done = false): FormatJob
         'status' => $done ? FormatJobStatus::Done : FormatJobStatus::Pending,
     ]);
 }
+
+test('uploads are limited per account per hour', function () {
+    config(['docxformatter.uploads_per_hour' => 2]);
+    Queue::fake();
+
+    foreach (range(1, 2) as $ignored) {
+        Livewire::test(FormatDocument::class)->set('file', fakeDocx())->call('format')->assertHasNoErrors();
+    }
+
+    Livewire::test(FormatDocument::class)->set('file', fakeDocx())->call('format')->assertHasErrors('file');
+
+    expect(FormatJob::count())->toBe(2);
+});
+
+test('the upload limit applies to each account separately', function () {
+    config(['docxformatter.uploads_per_hour' => 1]);
+    Queue::fake();
+
+    Livewire::test(FormatDocument::class)->set('file', fakeDocx())->call('format');
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(FormatDocument::class)->set('file', fakeDocx())->call('format')->assertHasNoErrors();
+
+    expect(FormatJob::count())->toBe(2);
+});
+
+test('a rejected upload does not use up the allowance', function () {
+    config(['docxformatter.uploads_per_hour' => 1]);
+    Queue::fake();
+
+    Livewire::test(FormatDocument::class)
+        ->set('file', fakeDocx())
+        ->set('spec.page.margins.left', '2 parsecs')
+        ->call('format')
+        ->assertHasErrors('spec.page.margins.left');
+
+    Livewire::test(FormatDocument::class)->set('file', fakeDocx())->call('format')->assertHasNoErrors();
+
+    expect(FormatJob::count())->toBe(1);
+});
